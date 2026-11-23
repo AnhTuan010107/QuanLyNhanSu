@@ -29,7 +29,7 @@
         <span class="me-3 d-none d-sm-inline">
             <i class="bi bi-person-circle me-1"></i>
             <?= htmlspecialchars($_SESSION['user']['full_name']) ?>
-            <span class="badge bg-primary text-uppercase ms-1"><?= $_SESSION['user']['role'] ?></span>
+            <span class="badge bg-primary ms-1"><?= htmlspecialchars($_SESSION['user']['role']) ?></span>
         </span>
         <a href="<?= BASE_URL ?>/logout" class="btn btn-outline-danger btn-sm">
             <i class="bi bi-box-arrow-right"></i> Đăng xuất

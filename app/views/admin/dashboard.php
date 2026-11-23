@@ -73,7 +73,7 @@ require_once __DIR__ . '/../layouts/admin_sidebar.php';
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white fw-semibold">Truy cập nhanh nghiệp vụ</div>
     <div class="card-body d-flex flex-wrap gap-2">
-        <?php if (($_SESSION['user']['role'] ?? '') === 'admin'): ?>
+        <?php if (($_SESSION['user']['role'] ?? '') === 'Quản lý'): ?>
             <a href="<?= BASE_URL ?>/admin/stores" class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-plus-circle me-1"></i> Quản lý Cửa hàng
             </a>

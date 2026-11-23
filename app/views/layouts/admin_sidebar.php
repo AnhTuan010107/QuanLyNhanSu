@@ -7,7 +7,7 @@
         </a>
     </li>
     <li class="nav-item mt-2 text-uppercase text-secondary small px-2 fw-bold">Nhân sự & Tổ chức</li>
-    <?php if (($_SESSION['user']['role'] ?? '') === 'admin'): ?>
+    <?php if (($_SESSION['user']['role'] ?? '') === 'Quản lý'): ?>
     <li class="nav-item">
         <a class="nav-link <?= $active === 'stores' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/stores">
             <i class="bi bi-shop me-2"></i> Cửa hàng

@@ -7,6 +7,8 @@ $url = isset($_GET['url']) ? trim($_GET['url'], '/') : 'login';
 
 require_once __DIR__ . '/../app/controllers/AuthController.php';
 require_once __DIR__ . '/../app/controllers/AdminController.php';
+require_once __DIR__ . '/../app/controllers/StoreController.php';
+require_once __DIR__ . '/../app/controllers/UserController.php';
 
 switch ($url) {
     case '':
@@ -26,12 +28,46 @@ switch ($url) {
         (new AdminController())->dashboard();
         break;
 
+    // Quản lý Cửa hàng
+    case 'admin/stores':
+        (new StoreController())->index();
+        break;
+
+    case 'admin/stores/store':
+        (new StoreController())->store();
+        break;
+
+    case 'admin/stores/update':
+        (new StoreController())->update();
+        break;
+
+    case 'admin/stores/delete':
+        (new StoreController())->delete();
+        break;
+
+    // Quản lý Hồ sơ Nhân viên
+    case 'admin/users':
+        (new UserController())->index();
+        break;
+
+    case 'admin/users/store':
+        (new UserController())->store();
+        break;
+
+    case 'admin/users/update':
+        (new UserController())->update();
+        break;
+
+    case 'admin/users/delete':
+        (new UserController())->delete();
+        break;
+
     case 'client/home':
         if (!isset($_SESSION['user'])) {
             header("Location: " . BASE_URL . "/login");
             exit;
         }
-        echo "<h2>Trang Nhân Viên (Staff)</h2>";
+        echo "<h2>Trang Nhân Viên (Trưởng Ca)</h2>";
         echo "<p>Xin chào: <strong>" . htmlspecialchars($_SESSION['user']['full_name']) . "</strong> - " . htmlspecialchars($_SESSION['user']['store_name']) . "</p>";
         echo "<a href='" . BASE_URL . "/logout'>Đăng xuất</a>";
         break;

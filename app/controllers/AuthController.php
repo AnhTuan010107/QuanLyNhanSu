@@ -58,7 +58,7 @@ class AuthController {
     }
 
     private function redirectByRole($role) {
-        if ($role === 'admin' || $role === 'manager') {
+        if (in_array($role, ['Quản lý', 'Trưởng ca (TC)'])) {
             header("Location: " . BASE_URL . "/admin/dashboard");
         } else {
             header("Location: " . BASE_URL . "/client/home");

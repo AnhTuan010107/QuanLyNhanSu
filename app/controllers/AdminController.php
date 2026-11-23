@@ -5,7 +5,7 @@ class AdminController {
     private $conn;
 
     public function __construct() {
-        if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], ['admin', 'manager'])) {
+        if (!isset($_SESSION['user']) || !in_array($_SESSION['user']['role'], ['Quản lý', 'Trưởng ca (TC)'])) {
             header("Location: " . BASE_URL . "/login");
             exit;
         }
