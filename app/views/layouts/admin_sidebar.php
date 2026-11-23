@@ -32,7 +32,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link <?= $active === 'attendances' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/attendances">
+        <a class="nav-link <?= $active === 'attendances' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/attendance">
             <i class="bi bi-fingerprint me-2"></i> Chấm công & Nghỉ phép
         </a>
     </li>

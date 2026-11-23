@@ -9,6 +9,11 @@ require_once __DIR__ . '/../app/controllers/AuthController.php';
 require_once __DIR__ . '/../app/controllers/AdminController.php';
 require_once __DIR__ . '/../app/controllers/StoreController.php';
 require_once __DIR__ . '/../app/controllers/UserController.php';
+require_once __DIR__ . '/../app/controllers/ShiftController.php';
+require_once __DIR__ . '/../app/controllers/ScheduleController.php';
+require_once __DIR__ . '/../app/controllers/PayrollController.php';
+require_once __DIR__ . '/../app/controllers/AttendanceLeaveController.php';
+require_once __DIR__ . '/../app/controllers/ClientController.php';
 
 switch ($url) {
     case '':
@@ -62,14 +67,135 @@ switch ($url) {
         (new UserController())->delete();
         break;
 
+    // Danh mục Ca làm
+    case 'admin/shifts':
+        (new ShiftController())->index();
+        break;
+
+    case 'admin/shifts/store':
+        (new ShiftController())->store();
+        break;
+
+    case 'admin/shifts/update':
+        (new ShiftController())->update();
+        break;
+
+    case 'admin/shifts/delete':
+        (new ShiftController())->delete();
+        break;
+
+    // Duyệt & Xếp ca làm việc
+    case 'admin/schedules':
+        (new ScheduleController())->index();
+        break;
+
+    case 'admin/schedules/approve':
+        (new ScheduleController())->approve();
+        break;
+
+    case 'admin/schedules/reject':
+        (new ScheduleController())->reject();
+        break;
+
+    case 'admin/schedules/approve-all':
+        (new ScheduleController())->approveAll();
+        break;
+
+    case 'admin/schedules/assign':
+        (new ScheduleController())->assign();
+        break;
+
+    case 'admin/schedules/delete':
+        (new ScheduleController())->delete();
+        break;
+
+    // Tính & Chốt Bảng lương
+    case 'admin/payrolls':
+        (new PayrollController())->index();
+        break;
+
+    case 'admin/payrolls/generate':
+        (new PayrollController())->generate();
+        break;
+
+    case 'admin/payrolls/update':
+        (new PayrollController())->update();
+        break;
+
+    case 'admin/payrolls/toggle-status':
+        (new PayrollController())->toggleStatus();
+        break;
+
+    case 'admin/payrolls/mark-all-paid':
+        (new PayrollController())->markAllPaid();
+        break;
+
+    case 'admin/payrolls/delete':
+        (new PayrollController())->delete();
+        break;
+
+    // Chấm công & Nghỉ phép (Admin / Trưởng ca)
+    case 'admin/attendances':
+    case 'admin/attendance':
+        (new AttendanceLeaveController())->adminIndex();
+        break;
+
+    case 'admin/attendance/store':
+        (new AttendanceLeaveController())->adminStoreAttendance();
+        break;
+
+    case 'admin/attendance/update':
+        (new AttendanceLeaveController())->adminUpdateAttendance();
+        break;
+
+    case 'admin/attendance/delete':
+        (new AttendanceLeaveController())->adminDeleteAttendance();
+        break;
+
+    case 'admin/leaves/review':
+        (new AttendanceLeaveController())->adminReviewLeave();
+        break;
+
+    // Cổng Nhân viên
     case 'client/home':
-        if (!isset($_SESSION['user'])) {
-            header("Location: " . BASE_URL . "/login");
-            exit;
-        }
-        echo "<h2>Trang Nhân Viên (Trưởng Ca)</h2>";
-        echo "<p>Xin chào: <strong>" . htmlspecialchars($_SESSION['user']['full_name']) . "</strong> - " . htmlspecialchars($_SESSION['user']['store_name']) . "</p>";
-        echo "<a href='" . BASE_URL . "/logout'>Đăng xuất</a>";
+        (new ClientController())->home();
+        break;
+
+    case 'client/schedules/cancel':
+        (new ClientController())->cancelShift();
+        break;
+
+    case 'client/profile/update':
+        (new ClientController())->updateProfile();
+        break;
+
+    case 'client/schedules':
+        (new ClientController())->registerPage();
+        break;
+
+    case 'client/schedules/save-availability':
+        (new ClientController())->saveAvailability();
+        break;
+
+    // Chấm công & Nghỉ phép (Nhân viên)
+    case 'client/attendance':
+        (new AttendanceLeaveController())->clientIndex();
+        break;
+
+    case 'client/attendance/check-in':
+        (new AttendanceLeaveController())->clientCheckIn();
+        break;
+
+    case 'client/attendance/check-out':
+        (new AttendanceLeaveController())->clientCheckOut();
+        break;
+
+    case 'client/leaves/store':
+        (new AttendanceLeaveController())->clientSubmitLeave();
+        break;
+
+    case 'client/leaves/cancel':
+        (new AttendanceLeaveController())->clientCancelLeave();
         break;
 
     default:
