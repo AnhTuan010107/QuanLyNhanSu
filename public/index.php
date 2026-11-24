@@ -3,203 +3,222 @@ session_start();
 
 define('BASE_URL', rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\'));
 
-$url = isset($_GET['url']) ? trim($_GET['url'], '/') : 'login';
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../models/AppModel.php';
+require_once __DIR__ . '/../controllers/AuthController.php';
 
-require_once __DIR__ . '/../app/controllers/AuthController.php';
-require_once __DIR__ . '/../app/controllers/AdminController.php';
-require_once __DIR__ . '/../app/controllers/StoreController.php';
-require_once __DIR__ . '/../app/controllers/UserController.php';
-require_once __DIR__ . '/../app/controllers/ShiftController.php';
-require_once __DIR__ . '/../app/controllers/ScheduleController.php';
-require_once __DIR__ . '/../app/controllers/PayrollController.php';
-require_once __DIR__ . '/../app/controllers/AttendanceLeaveController.php';
-require_once __DIR__ . '/../app/controllers/ClientController.php';
+$page = isset($_GET['page']) ? $_GET['page'] : 'login';
+$auth = new AuthController();
 
-switch ($url) {
-    case '':
-    case 'login':
-        (new AuthController())->showLogin();
-        break;
+if ($page === 'login') {
+    $auth->login();
+} elseif ($page === 'logout') {
+    $auth->logout();
+} elseif ($page === 'home') {
+    if (!isset($_SESSION['user'])) {
+        header("Location: " . BASE_URL . "/?page=login");
+        exit;
+    }
 
-    case 'auth/login':
-        (new AuthController())->handleLogin();
-        break;
+    $appModel = new AppModel();
+    $userId = $_SESSION['user']['id'];
+    $storeId = isset($_SESSION['user']['store_id']) ? $_SESSION['user']['store_id'] : 1;
+    $role = isset($_SESSION['user']['role']) && $_SESSION['user']['role'] !== ''
+        ? $_SESSION['user']['role']
+        : (isset($_SESSION['user']['position']) && $_SESSION['user']['position'] !== '' ? $_SESSION['user']['position'] : 'Nhân viên');
 
-    case 'logout':
-        (new AuthController())->logout();
-        break;
+    $isManager = ($role === 'Quản lý');
+    $isSup     = ($role === 'Trưởng ca (TC)');
 
-    case 'admin/dashboard':
-        (new AdminController())->dashboard();
-        break;
+    $defaultTab = $isManager ? 'branches' : 'overview';
+    $tab = isset($_GET['tab']) ? $_GET['tab'] : $defaultTab;
 
-    // Quản lý Cửa hàng
-    case 'admin/stores':
-        (new StoreController())->index();
-        break;
+    $attMsg = "";
+    $opMsg  = "";
 
-    case 'admin/stores/store':
-        (new StoreController())->store();
-        break;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+        $action = $_POST['action'];
 
-    case 'admin/stores/update':
-        (new StoreController())->update();
-        break;
+        if ($action === 'check_in') {
+            $appModel->checkInUser($userId, $storeId);
+            header("Location: " . BASE_URL . "/?page=home&tab=attendance&msg=checkin");
+            exit;
+        } elseif ($action === 'check_out') {
+            $attId = isset($_POST['attendance_id']) ? (int)$_POST['attendance_id'] : 0;
+            if ($attId > 0) {
+                $appModel->checkOutUser($attId, $userId);
+            }
+            header("Location: " . BASE_URL . "/?page=home&tab=attendance&msg=checkout");
+            exit;
+        } elseif ($action === 'create_leave') {
+            $leaveDate = isset($_POST['leave_date']) ? $_POST['leave_date'] : '';
+            $reason = isset($_POST['reason']) ? trim($_POST['reason']) : '';
+            if ($leaveDate !== '' && $reason !== '') {
+                $appModel->createLeaveRequest($userId, $leaveDate, $reason);
+                header("Location: " . BASE_URL . "/?page=home&tab=attendance&msg=leave_sent");
+                exit;
+            }
+        } elseif ($action === 'save_availability') {
+            $dates  = isset($_POST['work_date']) ? $_POST['work_date'] : [];
+            $starts = isset($_POST['start_hour']) ? $_POST['start_hour'] : [];
+            $ends   = isset($_POST['end_hour']) ? $_POST['end_hour'] : [];
+            $slots  = isset($_POST['slot_type']) ? $_POST['slot_type'] : [];
+            $note   = isset($_POST['avail_note']) ? trim($_POST['avail_note']) : "";
+            $weekOffset = isset($_POST['week']) ? (int)$_POST['week'] : 1;
 
-    case 'admin/stores/delete':
-        (new StoreController())->delete();
-        break;
+            $appModel->saveUserAvailabilities($userId, $dates, $starts, $ends, $slots, $note);
+            header("Location: " . BASE_URL . "/?page=home&tab=shifts&week=" . $weekOffset . "&saved=1");
+            exit;
+        } elseif ($action === 'review_leave' && ($isSup || $isManager)) {
+            $leaveId = isset($_POST['leave_id']) ? (int)$_POST['leave_id'] : 0;
+            $newStatus = isset($_POST['new_status']) ? $_POST['new_status'] : '';
+            $backTab = isset($_POST['back_tab']) ? $_POST['back_tab'] : 'leaves';
+            if ($leaveId > 0) {
+                $appModel->reviewLeaveRequest($leaveId, $userId, $newStatus);
+            }
+            header("Location: " . BASE_URL . "/?page=home&tab=" . urlencode($backTab) . "&opmsg=reviewed");
+            exit;
+        } elseif ($action === 'create_shift' && ($isSup || $isManager)) {
+            $code  = isset($_POST['shift_code']) ? trim($_POST['shift_code']) : '';
+            $name  = isset($_POST['shift_name']) ? trim($_POST['shift_name']) : '';
+            $stime = isset($_POST['start_time']) ? $_POST['start_time'] : '';
+            $etime = isset($_POST['end_time']) ? $_POST['end_time'] : '';
+            if ($code !== '' && $name !== '' && $stime !== '' && $etime !== '') {
+                $appModel->createShift($code, $name, $stime, $etime);
+            }
+            header("Location: " . BASE_URL . "/?page=home&tab=manage_shifts&opmsg=shift_created");
+            exit;
+        } elseif ($action === 'assign_schedule' && ($isSup || $isManager)) {
+            $targetUid = isset($_POST['target_user_id']) ? (int)$_POST['target_user_id'] : 0;
+            $shiftId   = isset($_POST['shift_id']) ? (int)$_POST['shift_id'] : 0;
+            $workDate  = isset($_POST['work_date']) ? $_POST['work_date'] : '';
+            $assignSid = isset($_POST['assign_store_id']) ? (int)$_POST['assign_store_id'] : $storeId;
+            if ($targetUid > 0 && $shiftId > 0 && $workDate !== '') {
+                $appModel->assignSchedule($targetUid, $assignSid, $shiftId, $workDate, $userId);
+            }
+            header("Location: " . BASE_URL . "/?page=home&tab=assign_schedule&opmsg=assigned");
+            exit;
+        } elseif ($action === 'add_staff' && ($isSup || $isManager)) {
+            $fullName   = isset($_POST['full_name']) ? trim($_POST['full_name']) : '';
+            $email      = isset($_POST['email']) ? trim($_POST['email']) : '';
+            $password   = isset($_POST['password']) ? trim($_POST['password']) : '';
+            $newRole    = isset($_POST['role']) ? trim($_POST['role']) : 'Nhân viên';
+            $newStoreId = isset($_POST['store_id']) ? (int)$_POST['store_id'] : 0;
+            $hourlyRate = isset($_POST['hourly_rate']) ? (float)$_POST['hourly_rate'] : 25000;
 
-    // Quản lý Hồ sơ Nhân viên
-    case 'admin/users':
-        (new UserController())->index();
-        break;
+            if ($fullName === '' || $email === '' || $password === '') {
+                header("Location: " . BASE_URL . "/?page=home&tab=staff_info&opmsg=missing_fields");
+                exit;
+            }
 
-    case 'admin/users/store':
-        (new UserController())->store();
-        break;
+            if ($appModel->emailExists($email)) {
+                header("Location: " . BASE_URL . "/?page=home&tab=staff_info&opmsg=email_exists");
+                exit;
+            }
 
-    case 'admin/users/update':
-        (new UserController())->update();
-        break;
+            $appModel->createStaffAccount($fullName, $email, $password, $newRole, $newStoreId, $hourlyRate);
+            header("Location: " . BASE_URL . "/?page=home&tab=staff_info&opmsg=staff_added");
+            exit;
+        } elseif ($action === 'update_staff' && ($isSup || $isManager)) {
+            $targetUid  = isset($_POST['target_user_id']) ? (int)$_POST['target_user_id'] : 0;
+            $fullName   = isset($_POST['full_name']) ? trim($_POST['full_name']) : '';
+            $newRole    = isset($_POST['role']) ? trim($_POST['role']) : 'Nhân viên';
+            $newStoreId = isset($_POST['store_id']) ? (int)$_POST['store_id'] : 0;
+            $hourlyRate = isset($_POST['hourly_rate']) ? (float)$_POST['hourly_rate'] : 25000;
+            $status     = isset($_POST['status']) ? trim($_POST['status']) : 'active';
+            $backTab    = isset($_POST['back_tab']) ? $_POST['back_tab'] : 'staff_info';
 
-    case 'admin/users/delete':
-        (new UserController())->delete();
-        break;
+            if ($targetUid > 0 && $fullName !== '') {
+                $appModel->updateStaffInfo($targetUid, $fullName, $newRole, $newStoreId, $hourlyRate, $status);
+            }
+            header("Location: " . BASE_URL . "/?page=home&tab=" . urlencode($backTab) . "&opmsg=staff_updated");
+            exit;
+        } elseif ($action === 'delete_staff' && ($isSup || $isManager)) {
+            $targetUid = isset($_POST['target_user_id']) ? (int)$_POST['target_user_id'] : 0;
+            $backTab   = isset($_POST['back_tab']) ? $_POST['back_tab'] : 'staff_info';
 
-    // Danh mục Ca làm
-    case 'admin/shifts':
-        (new ShiftController())->index();
-        break;
+            if ($targetUid > 0 && $targetUid !== (int)$userId) {
+                $appModel->deleteStaffAccount($targetUid);
+                header("Location: " . BASE_URL . "/?page=home&tab=" . urlencode($backTab) . "&opmsg=staff_deleted");
+                exit;
+            }
 
-    case 'admin/shifts/store':
-        (new ShiftController())->store();
-        break;
+            header("Location: " . BASE_URL . "/?page=home&tab=" . urlencode($backTab) . "&opmsg=cannot_delete_self");
+            exit;
+        }
+    }
 
-    case 'admin/shifts/update':
-        (new ShiftController())->update();
-        break;
+    if (isset($_GET['msg'])) {
+        if ($_GET['msg'] === 'checkin') $attMsg = "Đã Check-in thành công!";
+        elseif ($_GET['msg'] === 'checkout') $attMsg = "Đã Check-out và tính giờ công!";
+        elseif ($_GET['msg'] === 'leave_sent') $attMsg = "Đã gửi đơn xin nghỉ phép!";
+    }
 
-    case 'admin/shifts/delete':
-        (new ShiftController())->delete();
-        break;
+    if (isset($_GET['opmsg'])) {
+        if ($_GET['opmsg'] === 'reviewed') $opMsg = "Đã cập nhật đơn nghỉ phép!";
+        elseif ($_GET['opmsg'] === 'shift_created') $opMsg = "Đã thêm ca làm mới!";
+        elseif ($_GET['opmsg'] === 'assigned') $opMsg = "Đã sắp xếp lịch ca làm!";
+        elseif ($_GET['opmsg'] === 'staff_added') $opMsg = "Đã thêm nhân viên và tạo tài khoản Gmail thành công!";
+        elseif ($_GET['opmsg'] === 'email_exists') $opMsg = "Gmail này đã tồn tại trong hệ thống, vui lòng dùng Gmail khác!";
+        elseif ($_GET['opmsg'] === 'missing_fields') $opMsg = "Vui lòng nhập đầy đủ Họ tên, Gmail và Mật khẩu!";
+        elseif ($_GET['opmsg'] === 'staff_updated') $opMsg = "Đã cập nhật thông tin nhân viên!";
+        elseif ($_GET['opmsg'] === 'staff_deleted') $opMsg = "Đã xóa nhân viên khỏi hệ thống!";
+        elseif ($_GET['opmsg'] === 'cannot_delete_self') $opMsg = "Không thể tự xóa tài khoản đang đăng nhập!";
+    }
 
-    // Duyệt & Xếp ca làm việc
-    case 'admin/schedules':
-        (new ScheduleController())->index();
-        break;
+    $todayStr = date('Y-m-d');
+    $tomorrowStr = date('Y-m-d', strtotime('+1 day'));
 
-    case 'admin/schedules/approve':
-        (new ScheduleController())->approve();
-        break;
+    $overview = $appModel->getOverviewData($userId);
 
-    case 'admin/schedules/reject':
-        (new ScheduleController())->reject();
-        break;
+    $shiftMsg = (isset($_GET['saved']) && $_GET['saved'] == '1') ? "Đã lưu giờ rảnh thành công!" : "";
+    $weekOffset = isset($_GET['week']) ? (int)$_GET['week'] : 0;
+    if ($weekOffset < 0 || $weekOffset > 2) {
+        $weekOffset = 0;
+    }
 
-    case 'admin/schedules/approve-all':
-        (new ScheduleController())->approveAll();
-        break;
+    $todaySummary = $appModel->getShiftDaySummary($todayStr, $userId);
+    $tomorrowSummary = $appModel->getShiftDaySummary($tomorrowStr, $userId);
 
-    case 'admin/schedules/assign':
-        (new ScheduleController())->assign();
-        break;
+    $mondayTs = strtotime('monday this week') + ($weekOffset * 7 * 86400);
+    $weekDays = [];
+    $dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+    for ($i = 0; $i < 7; $i++) {
+        $ts = $mondayTs + ($i * 86400);
+        $weekDays[] = [
+            'label' => $dayLabels[$i],
+            'date'  => date('Y-m-d', $ts),
+            'dm'    => date('d/m', $ts)
+        ];
+    }
 
-    case 'admin/schedules/delete':
-        (new ScheduleController())->delete();
-        break;
+    $startWeek = $weekDays[0]['date'];
+    $endWeek = $weekDays[6]['date'];
 
-    // Tính & Chốt Bảng lương
-    case 'admin/payrolls':
-        (new PayrollController())->index();
-        break;
+    $myWeekSchedules = $appModel->getUserWeekSchedules($userId, $startWeek, $endWeek);
+    $selectedStoreDate = isset($_GET['cdate']) ? $_GET['cdate'] : $todayStr;
+    $filterStoreId = isset($_GET['filter_store']) ? (int)$_GET['filter_store'] : 0;
+    $storeTimeline = $appModel->getStoreDayTimeline($selectedStoreDate, $userId, $filterStoreId > 0 ? $filterStoreId : null);
+    $userAvailMap = $appModel->getUserAvailabilities($userId, $startWeek, $endWeek);
 
-    case 'admin/payrolls/generate':
-        (new PayrollController())->generate();
-        break;
+    $selectedSchedMonth = isset($_GET['sched_month']) ? $_GET['sched_month'] : date('Y-m');
+    $monthScheduleData = $appModel->getStoreMonthSchedules($selectedSchedMonth, $filterStoreId > 0 ? $filterStoreId : null);
+    $monthSchedulesByDate = $monthScheduleData['by_date'];
+    $monthStaffHours = $monthScheduleData['staff_summary'];
 
-    case 'admin/payrolls/update':
-        (new PayrollController())->update();
-        break;
+    $todayAttendance = $appModel->getTodayAttendance($userId);
+    $attendanceList = $appModel->getUserAttendances($userId);
+    $storeAttendances = $appModel->getStoreAttendances($selectedStoreDate, $filterStoreId > 0 ? $filterStoreId : null);
+    $leaveList = $appModel->getLeaveRequests($userId, ($isSup || $isManager));
 
-    case 'admin/payrolls/toggle-status':
-        (new PayrollController())->toggleStatus();
-        break;
+    $storesList = $appModel->getAllStores();
+    $staffList = $appModel->getAllStaff($filterStoreId > 0 ? $filterStoreId : null);
+    $allStaffList = $appModel->getAllStaff(null);
+    $allShifts = $appModel->getAllShifts();
+    $upcomingAvails = $appModel->getUpcomingAvailabilities();
 
-    case 'admin/payrolls/mark-all-paid':
-        (new PayrollController())->markAllPaid();
-        break;
-
-    case 'admin/payrolls/delete':
-        (new PayrollController())->delete();
-        break;
-
-    // Chấm công & Nghỉ phép (Admin / Trưởng ca)
-    case 'admin/attendances':
-    case 'admin/attendance':
-        (new AttendanceLeaveController())->adminIndex();
-        break;
-
-    case 'admin/attendance/store':
-        (new AttendanceLeaveController())->adminStoreAttendance();
-        break;
-
-    case 'admin/attendance/update':
-        (new AttendanceLeaveController())->adminUpdateAttendance();
-        break;
-
-    case 'admin/attendance/delete':
-        (new AttendanceLeaveController())->adminDeleteAttendance();
-        break;
-
-    case 'admin/leaves/review':
-        (new AttendanceLeaveController())->adminReviewLeave();
-        break;
-
-    // Cổng Nhân viên
-    case 'client/home':
-        (new ClientController())->home();
-        break;
-
-    case 'client/schedules/cancel':
-        (new ClientController())->cancelShift();
-        break;
-
-    case 'client/profile/update':
-        (new ClientController())->updateProfile();
-        break;
-
-    case 'client/schedules':
-        (new ClientController())->registerPage();
-        break;
-
-    case 'client/schedules/save-availability':
-        (new ClientController())->saveAvailability();
-        break;
-
-    // Chấm công & Nghỉ phép (Nhân viên)
-    case 'client/attendance':
-        (new AttendanceLeaveController())->clientIndex();
-        break;
-
-    case 'client/attendance/check-in':
-        (new AttendanceLeaveController())->clientCheckIn();
-        break;
-
-    case 'client/attendance/check-out':
-        (new AttendanceLeaveController())->clientCheckOut();
-        break;
-
-    case 'client/leaves/store':
-        (new AttendanceLeaveController())->clientSubmitLeave();
-        break;
-
-    case 'client/leaves/cancel':
-        (new AttendanceLeaveController())->clientCancelLeave();
-        break;
-
-    default:
-        http_response_code(404);
-        echo "<h3>404 - Không tìm thấy trang yêu cầu!</h3>";
-        break;
+    require_once __DIR__ . '/../views/home.php';
+} else {
+    http_response_code(404);
+    echo "404 - Không tìm thấy trang!";
 }
